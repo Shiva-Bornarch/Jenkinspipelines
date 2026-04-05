@@ -5,6 +5,10 @@ pipeline {
         maven 'maven'
     }
 
+    environment {
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+
     stages {
 
         stage("code") {
@@ -39,19 +43,13 @@ pipeline {
 
         stage("Docker images") {
             steps {
-                sh 'docker build -t tomcatimage2 .'
+                sh "docker build -t dudishivaram/java:${IMAGE_TAG} ."
             }
         }
 
         stage("image scan") {
             steps {
                 sh 'trivy image tomcatimage2'
-            }
-        }
-
-        stage("Docker tag") {
-            steps {
-                sh 'docker tag tomcatimage2 dudishivaram/java:web2'
             }
         }
 
@@ -71,15 +69,35 @@ pipeline {
 
         stage("Registry") {
             steps {
-                sh 'docker push dudishivaram/java:web2'
+                sh 'docker push dudishivaram/java:${IMAGE_TAG}'
             }
         }
 
-        stage("container") {
+        stage("Update Manifest Repo") {
             steps {
-                sh 'docker run -itd -p 1111:8080 dudishivaram/java:web2'
+                sh """
+                rm -rf One-ArgoCD
+                git clone git@github.com:Shiva-Bornarch/One-ArgoCD.git
+                cd One-ArgoCD/k8s-manifests
+
+                sed -i 's|image: .*|image: dudishivaram/java:${IMAGE_TAG}|' deployment.yaml
+
+                git config user.email "shivaram@gmail.com"
+                git config user.name "shivaram"
+
+                git commit -am "Update image to ${IMAGE_TAG}"
+                git push origin main
+                """
             }
         }
-
     }
 }
+
+
+// cp /root/.ssh/id_rsa /var/lib/jenkins/.ssh/
+// cp /root/.ssh/id_rsa.pub /var/lib/jenkins/.ssh/
+// cp /root/.ssh/known_hosts /var/lib/jenkins/.ssh/
+
+// chown -R jenkins:jenkins /var/lib/jenkins/.ssh
+// chmod 700 /var/lib/jenkins/.ssh
+// chmod 600 /var/lib/jenkins/.ssh/id_rsa
